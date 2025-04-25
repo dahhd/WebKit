@@ -170,12 +170,12 @@ static bool isCMSampleBufferRandomAccess(CMSampleBufferRef sample)
     CFArrayRef attachments = PAL::CMSampleBufferGetSampleAttachmentsArray(sample, false);
     if (!attachments)
         return true;
-    
-    for (CFIndex i = 0, count = CFArrayGetCount(attachments); i < count; ++i) {
-        if (!isCMSampleBufferAttachmentRandomAccess(checked_cf_cast<CFDictionaryRef>(CFArrayGetValueAtIndex(attachments, i))))
-            return false;
-    }
-    return true;
+
+    if (CFArrayGetCount(attachments) < 1)
+        return true;
+
+    CFDictionaryRef firstAttachment = checked_cf_cast<CFDictionaryRef>(CFArrayGetValueAtIndex(attachments, 0));
+    return isCMSampleBufferAttachmentRandomAccess(firstAttachment);
 }
 
 static bool isCMSampleBufferAttachmentNonDisplaying(CFDictionaryRef attachmentDict)
@@ -286,6 +286,22 @@ bool MediaSampleAVFObjC::isDivisable() const
         return false;
 
     return true;
+}
+
+Vector<Ref<MediaSampleAVFObjC>> MediaSampleAVFObjC::divide()
+{
+    auto numSamples = PAL::CMSampleBufferGetNumSamples(m_sample.get());
+
+    if (numSamples == 1)
+        return Vector<Ref<MediaSampleAVFObjC>>::from(Ref { *this });
+
+    Vector<Ref<MediaSampleAVFObjC>> samples;
+    samples.reserveInitialCapacity(numSamples);
+    PAL::CMSampleBufferCallBlockForEachSample(m_sample.get(), [&] (CMSampleBufferRef sampleBuffer, CMItemCount) -> OSStatus {
+        samples.append(MediaSampleAVFObjC::create(sampleBuffer, m_id));
+        return noErr;
+    });
+    return samples;
 }
 
 std::pair<RefPtr<MediaSample>, RefPtr<MediaSample>> MediaSampleAVFObjC::divide(const MediaTime& presentationTime, UseEndTime useEndTime)

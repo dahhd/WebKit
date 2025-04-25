@@ -31,7 +31,6 @@
 #include "ScriptExecutionContext.h"
 #include <JavaScriptCore/CatchScope.h>
 #include <JavaScriptCore/JSPromise.h>
-#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
@@ -237,7 +236,7 @@ private:
 };
 
 class DOMPromiseDeferredBase {
-    WTF_MAKE_TZONE_ALLOCATED_INLINE(DOMPromiseDeferredBase);
+    WTF_MAKE_TZONE_ALLOCATED_EXPORT(DOMPromiseDeferredBase, WEBCORE_EXPORT);
 public:
     DOMPromiseDeferredBase(Ref<DeferredPromise>&& genericPromise)
         : m_promise(WTFMove(genericPromise))
@@ -277,6 +276,12 @@ public:
         m_promise->reject(std::forward<ErrorType>(error)...);
     }
 
+    template<typename Callback>
+    void rejectWithCallback(Callback callback, RejectAsHandled rejectAsHandled = RejectAsHandled::No)
+    {
+        m_promise->rejectWithCallback(callback, rejectAsHandled);
+    }
+
     template<typename IDLType>
     void rejectType(typename IDLType::ParameterType value, RejectAsHandled rejectAsHandled = RejectAsHandled::No)
     {
@@ -304,7 +309,7 @@ public:
 
     void resolve(typename IDLType::ParameterType value)
     {
-        m_promise->resolve<IDLType>(std::forward<typename IDLType::ParameterType>(value));
+        m_promise->template resolve<IDLType>(std::forward<typename IDLType::ParameterType>(value));
     }
 
     template<typename U>

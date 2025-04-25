@@ -78,6 +78,7 @@ void VideoPresentationModelVideoElement::cleanVideoListeners()
     m_isListening = false;
     if (!m_videoElement)
         return;
+    m_videoElement->removeClient(*this);
     for (auto& eventName : observedEventNames())
         m_videoElement->removeEventListener(eventName, m_videoListener, false);
     for (auto& eventName : documentObservedEventNames())
@@ -101,6 +102,7 @@ void VideoPresentationModelVideoElement::setVideoElement(HTMLVideoElement* video
     ALWAYS_LOG_IF_POSSIBLE(LOGIDENTIFIER);
 
     if (m_videoElement) {
+        m_videoElement->addClient(*this);
         for (auto& eventName : observedEventNames())
             m_videoElement->addEventListener(eventName, m_videoListener, false);
         m_isListening = true;
@@ -404,18 +406,24 @@ void VideoPresentationModelVideoElement::setTextTrackRepresentationBounds(const 
     videoElement->setTextTrackRepresentataionBounds(bounds);
 }
 
+void VideoPresentationModelVideoElement::audioSessionCategoryChanged(AudioSessionCategory category, AudioSessionMode mode, RouteSharingPolicy policy)
+{
+    for (auto& client : copyToVector(m_clients))
+        client->audioSessionCategoryChanged(category, mode, policy);
+}
+
 #if !RELEASE_LOG_DISABLED
 const Logger* VideoPresentationModelVideoElement::loggerPtr() const
 {
     return m_videoElement ? &m_videoElement->logger() : nullptr;
 }
 
-const void* VideoPresentationModelVideoElement::logIdentifier() const
+uint64_t VideoPresentationModelVideoElement::logIdentifier() const
 {
-    return m_videoElement ? m_videoElement->logIdentifier() : nullptr;
+    return m_videoElement ? m_videoElement->logIdentifier() : 0;
 }
 
-const void* VideoPresentationModelVideoElement::nextChildIdentifier() const
+uint64_t VideoPresentationModelVideoElement::nextChildIdentifier() const
 {
     return LoggerHelper::childLogIdentifier(logIdentifier(), ++m_childIdentifierSeed);
 }

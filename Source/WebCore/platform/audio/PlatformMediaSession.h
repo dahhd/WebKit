@@ -31,6 +31,7 @@
 #include <wtf/Logger.h>
 #include <wtf/LoggerHelper.h>
 #include <wtf/Noncopyable.h>
+#include <wtf/ProcessID.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
@@ -54,7 +55,10 @@ class Document;
 class MediaPlaybackTarget;
 class PlatformMediaSessionClient;
 class PlatformMediaSessionManager;
+enum class AudioSessionCategory : uint8_t;
+enum class AudioSessionMode : uint8_t;
 enum class DelayCallingUpdateNowPlaying : bool { No, Yes };
+enum class RouteSharingPolicy : uint8_t;
 struct NowPlayingInfo;
 
 enum class PlatformMediaSessionRemoteControlCommandType : uint8_t {
@@ -230,7 +234,7 @@ public:
 
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final;
-    const void* logIdentifier() const final;
+    uint64_t logIdentifier() const final;
     ASCIILiteral logClassName() const override { return "PlatformMediaSession"_s; }
     WTFLogChannel& logChannel() const final;
 #endif
@@ -250,6 +254,10 @@ public:
 
     bool isActiveNowPlayingSession() const { return m_isActiveNowPlayingSession; }
     void setActiveNowPlayingSession(bool);
+
+    ProcessID presentingApplicationPID() const;
+
+    virtual void audioSessionCategoryChanged(AudioSessionCategory, AudioSessionMode, RouteSharingPolicy) { }
 
 #if !RELEASE_LOG_DISABLED
     virtual String description() const;
@@ -317,7 +325,7 @@ public:
 
     virtual bool isPlayingOnSecondScreen() const { return false; }
 
-    virtual MediaSessionGroupIdentifier mediaSessionGroupIdentifier() const = 0;
+    virtual std::optional<MediaSessionGroupIdentifier> mediaSessionGroupIdentifier() const = 0;
 
     virtual bool hasMediaStreamSource() const { return false; }
 
@@ -331,9 +339,11 @@ public:
 
     virtual void isActiveNowPlayingSessionChanged() = 0;
 
+    virtual ProcessID presentingApplicationPID() const = 0;
+
 #if !RELEASE_LOG_DISABLED
     virtual const Logger& logger() const = 0;
-    virtual const void* logIdentifier() const = 0;
+    virtual uint64_t logIdentifier() const = 0;
 #endif
 
 protected:

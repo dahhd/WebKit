@@ -17,6 +17,7 @@ list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES
     ${WEBCORE_DIR}/platform/graphics/opengl
     ${WEBCORE_DIR}/platform/graphics/libwpe
     ${WEBCORE_DIR}/platform/mediacapabilities
+    ${WEBCORE_DIR}/platform/video-codecs
 )
 
 list(APPEND WebCore_SOURCES
@@ -65,10 +66,6 @@ list(APPEND WebCore_SOURCES
     platform/unix/SharedMemoryUnix.cpp
 
     rendering/playstation/RenderThemePlayStation.cpp
-)
-
-list(APPEND WebCore_USER_AGENT_STYLE_SHEETS
-    ${WEBCORE_DIR}/css/mediaControls.css
 )
 
 list(APPEND WebCore_LIBRARIES

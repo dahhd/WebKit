@@ -180,11 +180,31 @@ void WebsitePoliciesData::applyToDocumentLoader(WebsitePoliciesData&& websitePol
         break;
     }
 
-    if (!documentLoader.frame())
+    switch (websitePolicies.inlineMediaPlaybackPolicy) {
+    case WebsiteInlineMediaPlaybackPolicy::Default:
+        documentLoader.setInlineMediaPlaybackPolicy(WebCore::InlineMediaPlaybackPolicy::Default);
+        break;
+    case WebsiteInlineMediaPlaybackPolicy::RequiresPlaysInlineAttribute:
+        documentLoader.setInlineMediaPlaybackPolicy(WebCore::InlineMediaPlaybackPolicy::RequiresPlaysInlineAttribute);
+        break;
+    case WebsiteInlineMediaPlaybackPolicy::DoesNotRequirePlaysInlineAttribute:
+        documentLoader.setInlineMediaPlaybackPolicy(WebCore::InlineMediaPlaybackPolicy::DoesNotRequirePlaysInlineAttribute);
+        break;
+    }
+
+    RefPtr frame = documentLoader.frame();
+    if (!frame)
         return;
+
+    if (!frame->isMainFrame())
+        return;
+
+#if ENABLE(TOUCH_EVENTS)
+    if (auto overrideValue = websitePolicies.overrideTouchEventDOMAttributesEnabled)
+        frame->settings().setTouchEventDOMAttributesEnabled(*overrideValue);
+#endif
 
     documentLoader.applyPoliciesToSettings();
 }
 
-}
-
+} // namespace WebKit

@@ -333,7 +333,7 @@ struct FrameData {
 
     struct InputSource {
         InputSourceHandle handle { 0 };
-        XRHandedness handeness { XRHandedness::None };
+        XRHandedness handedness { XRHandedness::None };
         XRTargetRayMode targetRayMode { XRTargetRayMode::Gaze };
         Vector<String> profiles;
         InputSourcePose pointerOrigin;
@@ -366,10 +366,6 @@ class Device : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<Device> {
 public:
     virtual ~Device() = default;
 
-    void ref() const { ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<Device>::ref(); }
-    void deref() const { ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<Device>::deref(); }
-    ThreadSafeWeakPtrControlBlock& controlBlock() const { return ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<Device>::controlBlock(); }
-
     using FeatureList = Vector<SessionFeature>;
     bool supports(SessionMode mode) const { return m_supportedFeaturesMap.contains(mode); }
     void setSupportedFeatures(SessionMode mode, const FeatureList& features) { m_supportedFeaturesMap.set(mode, features); }
@@ -378,6 +374,7 @@ public:
     FeatureList enabledFeatures(SessionMode mode) const { return m_enabledFeaturesMap.get(mode); }
 
     virtual WebCore::IntSize recommendedResolution(SessionMode) { return { 1, 1 }; }
+    virtual double minimumNearClipPlane() const { return 0.1; }
 
     bool supportsOrientationTracking() const { return m_supportsOrientationTracking; }
     bool supportsViewportScaling() const { return m_supportsViewportScaling; }

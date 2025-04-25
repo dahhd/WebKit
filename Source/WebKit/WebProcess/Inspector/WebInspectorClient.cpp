@@ -27,7 +27,7 @@
 #include "WebInspectorClient.h"
 
 #include "DrawingArea.h"
-#include "WebInspector.h"
+#include "WebInspectorInternal.h"
 #include "WebPage.h"
 #include <WebCore/Animation.h>
 #include <WebCore/GraphicsLayer.h>
@@ -102,7 +102,7 @@ void WebInspectorClient::frontendCountChanged(unsigned count)
 Inspector::FrontendChannel* WebInspectorClient::openLocalFrontend(InspectorController* controller)
 {
     if (RefPtr page = m_page.get())
-        page->inspector()->openLocalInspectorFrontend(controller->isUnderTest());
+        page->inspector()->openLocalInspectorFrontend();
     return nullptr;
 }
 

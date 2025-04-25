@@ -105,12 +105,13 @@ private:
     // VideoPresentationModelClient
     void hasVideoChanged(bool) override;
     void documentVisibilityChanged(bool) override;
+    void audioSessionCategoryChanged(WebCore::AudioSessionCategory, WebCore::AudioSessionMode, WebCore::RouteSharingPolicy) final;
 
     // CheckedPtr interface
-    uint32_t ptrCount() const final { return CanMakeCheckedPtr::ptrCount(); }
-    uint32_t ptrCountWithoutThreadCheck() const final { return CanMakeCheckedPtr::ptrCountWithoutThreadCheck(); }
-    void incrementPtrCount() const final { CanMakeCheckedPtr::incrementPtrCount(); }
-    void decrementPtrCount() const final { CanMakeCheckedPtr::decrementPtrCount(); }
+    uint32_t checkedPtrCount() const final { return CanMakeCheckedPtr::checkedPtrCount(); }
+    uint32_t checkedPtrCountWithoutThreadCheck() const final { return CanMakeCheckedPtr::checkedPtrCountWithoutThreadCheck(); }
+    void incrementCheckedPtrCount() const final { CanMakeCheckedPtr::incrementCheckedPtrCount(); }
+    void decrementCheckedPtrCount() const final { CanMakeCheckedPtr::decrementCheckedPtrCount(); }
 
     void videoDimensionsChanged(const WebCore::FloatSize&) override;
     void setPlayerIdentifier(std::optional<WebCore::MediaPlayerIdentifier>) final;
@@ -133,12 +134,13 @@ class VideoPresentationManager
     , public CanMakeWeakPtr<VideoPresentationManager>
     , private IPC::MessageReceiver {
 public:
-    using CanMakeWeakPtr<VideoPresentationManager>::WeakPtrImplType;
-    using CanMakeWeakPtr<VideoPresentationManager>::WeakValueType;
-    using CanMakeWeakPtr<VideoPresentationManager>::weakPtrFactory;
+    USING_CAN_MAKE_WEAKPTR(CanMakeWeakPtr<VideoPresentationManager>);
 
     static Ref<VideoPresentationManager> create(WebPage&, PlaybackSessionManager&);
     virtual ~VideoPresentationManager();
+
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
 
     void invalidate();
 
@@ -148,6 +150,8 @@ public:
 
     void setupRemoteLayerHosting(WebCore::HTMLVideoElement&);
     void willRemoveLayerForID(PlaybackSessionContextIdentifier);
+
+    void swapFullscreenModes(WebCore::HTMLVideoElement&, WebCore::HTMLVideoElement&);
 
     // Interface to WebChromeClient
     bool canEnterVideoFullscreen(WebCore::HTMLMediaElementEnums::VideoFullscreenMode) const;
@@ -183,6 +187,7 @@ protected:
     void documentVisibilityChanged(PlaybackSessionContextIdentifier, bool isDocumentVisible);
     void videoDimensionsChanged(PlaybackSessionContextIdentifier, const WebCore::FloatSize&);
     void setPlayerIdentifier(PlaybackSessionContextIdentifier, std::optional<WebCore::MediaPlayerIdentifier>);
+    void audioSessionCategoryChanged(PlaybackSessionContextIdentifier, WebCore::AudioSessionCategory, WebCore::AudioSessionMode, WebCore::RouteSharingPolicy);
 
     // Messages from VideoPresentationManagerProxy
     void requestFullscreenMode(PlaybackSessionContextIdentifier, WebCore::HTMLMediaElementEnums::VideoFullscreenMode, bool finishedWithMedia);
@@ -211,7 +216,7 @@ protected:
 
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const;
-    const void* logIdentifier() const;
+    uint64_t logIdentifier() const;
     ASCIILiteral logClassName() const;
     WTFLogChannel& logChannel() const;
 #endif
@@ -220,7 +225,6 @@ protected:
     Ref<PlaybackSessionManager> m_playbackSessionManager;
     WeakHashMap<WebCore::HTMLVideoElement, PlaybackSessionContextIdentifier> m_videoElements;
     HashMap<PlaybackSessionContextIdentifier, ModelInterfaceTuple> m_contextMap;
-    PlaybackSessionContextIdentifier m_controlsManagerContextId;
     HashMap<PlaybackSessionContextIdentifier, int> m_clientCounts;
     WeakPtr<WebCore::HTMLVideoElement> m_videoElementInPictureInPicture;
     bool m_currentlyInFullscreen { false };

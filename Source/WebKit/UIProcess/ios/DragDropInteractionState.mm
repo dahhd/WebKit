@@ -105,10 +105,8 @@ static bool shouldUseDragImageToCreatePreviewForDragSource(const DragSourceState
     if (!source.image)
         return false;
 
-#if ENABLE(INPUT_TYPE_COLOR)
     if (source.action.contains(DragSourceAction::Color))
         return true;
-#endif
 
 #if ENABLE(MODEL_ELEMENT)
     if (source.action.contains(DragSourceAction::Model))
@@ -123,10 +121,8 @@ static bool shouldUseVisiblePathToCreatePreviewForDragSource(const DragSourceSta
     if (!source.visiblePath)
         return false;
 
-#if ENABLE(INPUT_TYPE_COLOR)
     if (source.action.contains(DragSourceAction::Color))
         return true;
-#endif
 
     return false;
 }
@@ -152,10 +148,8 @@ static bool canUpdatePreviewForActiveDragSource(const DragSourceState& source)
     if (!source.possiblyNeedsDragPreviewUpdate)
         return false;
 
-#if ENABLE(INPUT_TYPE_COLOR)
     if (source.action.contains(DragSourceAction::Color))
         return true;
-#endif
 
     if (source.action.contains(DragSourceAction::Link) && !source.action.contains(DragSourceAction::Image))
         return true;
@@ -290,7 +284,7 @@ UITargetedDragPreview *DragDropInteractionState::previewForLifting(UIDragItem *i
 UITargetedDragPreview *DragDropInteractionState::previewForCancelling(UIDragItem *item, UIView *contentView, UIView *previewContainer)
 {
     auto preview = createDragPreviewInternal(item, contentView, previewContainer, AddPreviewViewToContainer::Yes, std::nullopt);
-    m_previewViewForDragCancel = [preview view];
+    m_previewViewsForDragCancel.append([preview view]);
     return preview.autorelease();
 }
 
@@ -377,7 +371,8 @@ void DragDropInteractionState::clearStagedDragSource(DidBecomeActive didBecomeAc
 
 void DragDropInteractionState::dragAndDropSessionsDidBecomeInactive()
 {
-    if (auto previewView = takePreviewViewForDragCancel())
+    auto previewViewsToRemove = takePreviewViewsForDragCancel();
+    for (auto& previewView : previewViewsToRemove)
         [previewView removeFromSuperview];
 
     // If any of UIKit's completion blocks are still in-flight when the drag interaction ends, we need to ensure that they are still invoked
@@ -416,7 +411,6 @@ void DragDropInteractionState::updatePreviewsForActiveDragSources()
                 return preview.autorelease();
             };
         }
-#if ENABLE(INPUT_TYPE_COLOR)
         else if (source.action.contains(DragSourceAction::Color)) {
             dragItem.previewProvider = [image = source.image] () -> UIDragPreview * {
                 auto imageView = adoptNS([[UIImageView alloc] initWithImage:image.get()]);
@@ -424,7 +418,6 @@ void DragDropInteractionState::updatePreviewsForActiveDragSources()
                 return adoptNS([[UIDragPreview alloc] initWithView:imageView.get() parameters:parameters.get()]).autorelease();
             };
         }
-#endif
 
         source.possiblyNeedsDragPreviewUpdate = false;
     }
