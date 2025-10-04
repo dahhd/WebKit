@@ -36,6 +36,9 @@
     RetainPtr<UIColor> _selectionHandleColor;
     RetainPtr<UIColor> _selectionHighlightColor;
     RetainPtr<UITextInputPasswordRules> _passwordRules;
+#if HAVE(UI_CONVERSATION_CONTEXT)
+    RetainPtr<UIConversationContext> _conversationContext;
+#endif
 }
 
 - (instancetype)init
@@ -43,6 +46,7 @@
     if (!(self = [super init]))
         return nil;
 
+    self.allowsNumberPadPopover = NO;
     self.typingAdaptationEnabled = YES;
     self.autocapitalizationType = UITextAutocapitalizationTypeSentences;
     return self;
@@ -98,6 +102,20 @@
     return _selectionHighlightColor.get();
 }
 
+#if HAVE(UI_CONVERSATION_CONTEXT)
+
+- (UIConversationContext *)conversationContext
+{
+    return _conversationContext.get();
+}
+
+- (void)setConversationContext:(UIConversationContext *)context
+{
+    _conversationContext = context;
+}
+
+#endif // HAVE(UI_CONVERSATION_CONTEXT)
+
 - (void)setSelectionColorsToMatchTintColor:(UIColor *)tintColor
 {
     static constexpr auto selectionHighlightAlphaComponent = 0.2;
@@ -120,6 +138,7 @@
     self.smartDashesType = UITextSmartDashesTypeDefault;
     self.keyboardType = UIKeyboardTypeDefault;
     self.keyboardAppearance = UIKeyboardAppearanceDefault;
+    self.allowsNumberPadPopover = NO;
     self.returnKeyType = UIReturnKeyDefault;
     self.secureTextEntry = NO;
     self.singleLineDocument = NO;

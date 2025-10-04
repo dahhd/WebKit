@@ -28,18 +28,24 @@
 #if PLATFORM(MAC)
 
 #include "ScrollTypes.h"
+#include "UserInterfaceLayoutDirection.h"
+#include <wtf/RecursiveLockAdapter.h>
 #include <wtf/RetainPtr.h>
 
 OBJC_CLASS CALayer;
 OBJC_CLASS NSScrollerImp;
 OBJC_CLASS WebScrollerImpDelegateMac;
 
+enum class FeatureToAnimate;
+
 namespace WebCore {
 
 class FloatPoint;
 class ScrollerPairMac;
 
-class ScrollerMac {
+class ScrollerMac final : public CanMakeThreadSafeCheckedPtr<ScrollerMac> {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(ScrollerMac);
     friend class ScrollerPairMac;
 public:
     ScrollerMac(ScrollerPairMac&, ScrollbarOrientation);
@@ -48,15 +54,14 @@ public:
 
     void attach();
 
-    ScrollerPairMac& pair() { return m_pair; }
+    RefPtr<ScrollerPairMac> pair() const { return m_pair.get(); }
 
     ScrollbarOrientation orientation() const { return m_orientation; }
 
     CALayer *hostLayer() const { return m_hostLayer.get(); }
     void setHostLayer(CALayer *);
 
-    RetainPtr<NSScrollerImp> takeScrollerImp() { return std::exchange(m_scrollerImp, { }); }
-    NSScrollerImp *scrollerImp() { return m_scrollerImp.get(); }
+    RetainPtr<NSScrollerImp> takeScrollerImp();
     void setScrollerImp(NSScrollerImp *imp);
     void updateScrollbarStyle();
     void updatePairScrollerImps();
@@ -76,8 +81,16 @@ public:
     void detach();
     void setEnabled(bool flag) { m_isEnabled = flag; }
     void setScrollbarLayoutDirection(UserInterfaceLayoutDirection);
+    void setUsePresentationValue(bool inMomentumPhase);
 
     void setNeedsDisplay();
+
+    void updateProgress(FeatureToAnimate, double);
+    bool isScrollerFor(NSScrollerImp*);
+    double knobAlpha();
+    double trackAlpha();
+    bool hasScrollerImp();
+    RecursiveLock& scrollerImpLock() const { return m_scrollerImpLock; }
 
 private:
     int m_minimumKnobLength { 0 };
@@ -86,11 +99,13 @@ private:
     bool m_isVisible { false };
     bool m_isHiddenByStyle { false };
 
-    ScrollerPairMac& m_pair;
+    ThreadSafeWeakPtr<ScrollerPairMac> m_pair;
     const ScrollbarOrientation m_orientation;
     IntPoint m_lastKnownMousePositionInScrollbar;
+    UserInterfaceLayoutDirection m_scrollbarLayoutDirection { UserInterfaceLayoutDirection::LTR };
 
     RetainPtr<CALayer> m_hostLayer;
+    mutable RecursiveLock m_scrollerImpLock;
     RetainPtr<NSScrollerImp> m_scrollerImp;
     RetainPtr<WebScrollerImpDelegateMac> m_scrollerImpDelegate;
 };

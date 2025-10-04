@@ -40,7 +40,7 @@
 OBJC_CLASS AVSampleBufferDisplayLayer;
 OBJC_CLASS WebAVSampleBufferStatusChangeListener;
 
-typedef struct __CVBuffer* CVPixelBufferRef;
+typedef struct CF_BRIDGED_TYPE(id) __CVBuffer* CVPixelBufferRef;
 
 namespace WebCore {
 
@@ -69,12 +69,12 @@ public:
     PlatformLayer* rootLayer() final;
     void initialize(bool hideRootLayer, IntSize, bool shouldMaintainAspectRatio, CompletionHandler<void(bool didSucceed)>&&) final;
 #if !RELEASE_LOG_DISABLED
-    void setLogIdentifier(String&& logIdentifier) final { m_logIdentifier = WTFMove(logIdentifier); }
+    void setLogIdentifier(uint64_t) final;
 #endif
     bool didFail() const final;
 
     void updateDisplayMode(bool hideDisplayLayer, bool hideRootLayer) final;
-    void updateBoundsAndPosition(CGRect, std::optional<WTF::MachSendRight>&&) final;
+    void updateBoundsAndPosition(CGRect, std::optional<WTF::MachSendRightAnnotated>&&) final;
 
     void flush() final;
     void flushAndRemoveImage() final;
@@ -105,7 +105,7 @@ private:
     RetainPtr<PlatformLayer> m_rootLayer;
     RenderPolicy m_renderPolicy { RenderPolicy::TimingInfo };
 
-    Ref<WorkQueue> m_processingQueue;
+    const Ref<WorkQueue> m_processingQueue;
 
     // Only accessed through m_processingQueue or if m_processingQueue is null.
     using PendingSampleQueue = Deque<Ref<VideoFrame>>;
@@ -117,7 +117,7 @@ private:
     bool m_paused { false };
     bool m_didFail { false };
 #if !RELEASE_LOG_DISABLED
-    String m_logIdentifier;
+    uint64_t m_logIdentifier;
     FrameRateMonitor m_frameRateMonitor WTF_GUARDED_BY_CAPABILITY(workQueue());
 #endif
 };

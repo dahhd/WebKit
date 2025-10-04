@@ -59,6 +59,12 @@
 @property (nonatomic, strong) UIColor *selectionHandleColor;
 @property (nonatomic, strong) UIColor *selectionHighlightColor;
 
+#if HAVE(UI_CONVERSATION_CONTEXT)
+@property (nonatomic, strong) UIConversationContext *conversationContext;
+#endif
+
+@property (nonatomic) BOOL allowsNumberPadPopover;
+
 - (void)setSelectionColorsToMatchTintColor:(UIColor *)tintColor;
 - (void)restoreDefaultValues;
 

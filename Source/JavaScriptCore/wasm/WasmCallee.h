@@ -29,6 +29,7 @@
 
 #include "JITCompilation.h"
 #include "NativeCallee.h"
+#include "PCToCodeOriginMap.h"
 #include "RegisterAtOffsetList.h"
 #include "StackAlignment.h"
 #include "WasmCompilationMode.h"
@@ -50,6 +51,10 @@
 namespace JSC {
 
 class LLIntOffsetsExtractor;
+
+namespace B3 {
+class PCToOriginMap;
+}
 
 namespace Wasm {
 
@@ -163,10 +168,10 @@ public:
     unsigned ident() const { return m_ident; }
 #endif
     unsigned frameSize() const { return m_frameSize; }
-    EncodedJSValue wasmCallee() const { return m_wasmCallee; }
+    CalleeBits wasmCallee() const { return m_wasmCallee; }
     TypeIndex typeIndex() const { return m_typeIndex; }
 
-    void setWasmCallee(EncodedJSValue wasmCallee)
+    void setWasmCallee(CalleeBits wasmCallee)
     {
         m_wasmCallee = wasmCallee;
     }
@@ -179,7 +184,7 @@ private:
 #endif
     unsigned m_frameSize { };
     // This must be initialized after the callee is created unfortunately.
-    EncodedJSValue m_wasmCallee;
+    CalleeBits m_wasmCallee;
     const TypeIndex m_typeIndex;
 };
 
@@ -192,7 +197,7 @@ public:
     WasmToJSCallee(FunctionSpaceIndex, std::pair<const Name*, RefPtr<NameSection>>&&);
     static WasmToJSCallee& singleton();
 
-    uintptr_t* boxedWasmCalleeLoadLocation() { return &m_boxedThis; }
+    CalleeBits* boxedWasmCalleeLoadLocation() { return &m_boxedThis; }
 
 private:
     WasmToJSCallee();
@@ -200,7 +205,7 @@ private:
     CodePtr<WasmEntryPtrTag> entrypointImpl() const { return { }; }
     RegisterAtOffsetList* calleeSaveRegistersImpl() { return nullptr; }
 
-    uintptr_t m_boxedThis;
+    CalleeBits m_boxedThis;
 };
 
 #if ENABLE(JIT)
@@ -251,6 +256,9 @@ public:
 
     void addCodeOrigin(unsigned firstInlineCSI, unsigned lastInlineCSI, const Wasm::ModuleInformation&, uint32_t functionIndex);
     IndexOrName getOrigin(unsigned csi, unsigned depth, bool& isInlined) const;
+    std::optional<CallSiteIndex> tryGetCallSiteIndex(const void*) const;
+
+    Box<PCToCodeOriginMap> materializePCToOriginMap(B3::PCToOriginMap&&, LinkBuffer&);
 
 protected:
     OptimizingJITCallee(Wasm::CompilationMode mode, FunctionSpaceIndex index, std::pair<const Name*, RefPtr<NameSection>>&& name)
@@ -273,6 +281,7 @@ private:
     StackMaps m_stackmaps;
     Vector<WasmCodeOrigin, 0> codeOrigins;
     Vector<Ref<NameSection>, 0> nameSections;
+    Box<PCToCodeOriginMap> m_callSiteIndexMap;
 };
 
 constexpr int32_t stackCheckUnset = 0;

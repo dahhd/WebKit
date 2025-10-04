@@ -26,6 +26,8 @@ const CalleeSaveSpaceAsVirtualRegisters = constexpr Wasm::numberOfLLIntCalleeSav
 const CalleeSaveSpaceStackAligned = (CalleeSaveSpaceAsVirtualRegisters * SlotSize + StackAlignment - 1) & ~StackAlignmentMask
 const WasmEntryPtrTag = constexpr WasmEntryPtrTag
 const UnboxedWasmCalleeStackSlot = CallerFrame - constexpr Wasm::numberOfLLIntCalleeSaveRegisters * SlotSize - MachineRegisterSize
+const WasmToJSScratchSpaceSize = constexpr Wasm::WasmToJSScratchSpaceSize
+const WasmToJSCallableFunctionSlot = constexpr Wasm::WasmToJSCallableFunctionSlot
 
 if HAVE_FAST_TLS
     const WTF_WASM_CONTEXT_KEY = constexpr WTF_WASM_CONTEXT_KEY
@@ -387,8 +389,10 @@ if TRACING
      )
 end
 
+if not ADDRESS64
     bpa ws1, cfr, .stackOverflow
-    bpbeq JSWebAssemblyInstance::m_softStackLimit[wasmInstance], ws1, .stackHeightOK
+end
+    bplteq JSWebAssemblyInstance::m_softStackLimit[wasmInstance], ws1, .stackHeightOK
 
 .stackOverflow:
     throwException(StackOverflow)
@@ -484,8 +488,10 @@ if not JSVALUE64
     subp 8, ws1 # align stack pointer
 end
 
+if not ADDRESS64
     bpa ws1, cfr, .stackOverflow
-    bpbeq JSWebAssemblyInstance::m_softStackLimit[wasmInstance], ws1, .stackHeightOK
+end
+    bplteq JSWebAssemblyInstance::m_softStackLimit[wasmInstance], ws1, .stackHeightOK
 
 .stackOverflow:
     throwException(StackOverflow)
@@ -659,7 +665,7 @@ op(js_to_wasm_wrapper_entry, macro ()
         addp constexpr Wasm::JSEntrypointCallee::SpillStackSpaceAligned, sp
     end
 
-    macro getWebAssemblyFunctionAndsetNativeCalleeAndInstance(webAssemblyFunctionOut, scratch)
+    macro getWebAssemblyFunctionAndSetNativeCalleeAndInstance(webAssemblyFunctionOut, scratch)
         # Re-load WebAssemblyFunction Callee
         loadp Callee[cfr], webAssemblyFunctionOut
 
@@ -686,6 +692,57 @@ end
     loadp Callee[cfr], ws0 # WebAssemblyFunction*
     loadp WebAssemblyFunction::m_instance[ws0], wasmInstance
 
+    # Allocate stack space
+    loadi WebAssemblyFunction::m_frameSize[ws0], wa0
+    subp sp, wa0, wa0
+
+if not ADDRESS64
+    bpa wa0, cfr, .stackOverflow
+end
+    bplteq wa0, JSWebAssemblyInstance::m_softStackLimit[wasmInstance], .stackOverflow
+
+    move wa0, sp
+
+if ASSERT_ENABLED
+    repeat(wa0, macro (i)
+        storep wa0, -i * SlotSize + constexpr Wasm::JSEntrypointCallee::RegisterStackSpaceAligned[sp]
+    end)
+end
+
+    # a0 = current stack frame position
+    move sp, a0
+
+    # Save wasmInstance and put the correct Callee into the stack for building the frame
+    storep wasmInstance, CodeBlock[cfr]
+
+if JSVALUE64
+    loadp Callee[cfr], memoryBase
+    transferp WebAssemblyFunction::m_boxedJSToWasmCallee[ws0], Callee[cfr]
+else
+    # Store old Callee to the stack temporarily
+    loadp Callee[cfr], ws1
+    push ws1, ws1
+    loadp WebAssemblyFunction::m_boxedJSToWasmCallee[ws0], ws1
+    storep ws1, Callee[cfr]
+end
+
+    # Prepare frame
+    move ws0, a2
+    move cfr, a1
+    cCall3(_operationJSToWasmEntryWrapperBuildFrame)
+
+    # Restore Callee slot
+if JSVALUE64
+    storep memoryBase, Callee[cfr]
+else
+    loadp [sp], ws0
+    addq 2 * SlotSize, sp
+    storep ws0, Callee[cfr]
+end
+
+    btpnz r1, .buildEntryFrameThrew
+    move r0, ws0
+
     # Memory
     if ARM64 or ARM64E
         loadpairq JSWebAssemblyInstance::m_cachedMemory[wasmInstance], memoryBase, boundsCheckingSize
@@ -696,30 +753,6 @@ end
     if not ARMv7
         cagedPrimitiveMayBeNull(memoryBase, wa0)
     end
-
-    # Allocate stack space
-    loadi WebAssemblyFunction::m_frameSize[ws0], wa0
-    subp sp, wa0, wa0
-
-    bpa wa0, cfr, .stackOverflow
-    bpbeq wa0, JSWebAssemblyInstance::m_softStackLimit[wasmInstance], .stackOverflow
-
-    move wa0, sp
-
-if ASSERT_ENABLED
-    repeat(wa0, macro (i)
-        storep wa0, -i * SlotSize + constexpr Wasm::JSEntrypointCallee::RegisterStackSpaceAligned[sp]
-    end)
-end
-
-    # Prepare frame
-    move ws0, a2
-    move cfr, a1
-    move sp, a0
-    cCall3(_operationJSToWasmEntryWrapperBuildFrame)
-
-    btpnz r1, .buildEntryFrameThrew
-    move r0, ws0
 
     # Arguments
 
@@ -756,7 +789,7 @@ if ASSERT_ENABLED
     end)
 end
 
-    getWebAssemblyFunctionAndsetNativeCalleeAndInstance(ws1, ws0)
+    getWebAssemblyFunctionAndSetNativeCalleeAndInstance(ws1, ws0)
 
     # Load callee entrypoint
     loadp WebAssemblyFunction::m_importableFunction + Wasm::WasmOrJSImportableFunction::entrypointLoadLocation[ws1], ws0
@@ -766,10 +799,8 @@ end
 if JSVALUE64
     transferp WebAssemblyFunction::m_boxedWasmCallee[ws1], constexpr (CallFrameSlot::callee - CallerFrameAndPC::sizeInRegisters) * 8[sp]
 else
-    break
-    # FIXME: Implement these instructions for armv7.
-    # transferp Wasm::JSEntrypointCallee::m_wasmCallee + PayloadOffset[ws1], constexpr (CallFrameSlot::callee - CallerFrameAndPC::sizeInRegisters) * 8 + PayloadOffset[sp]
-    # transferp Wasm::JSEntrypointCallee::m_wasmCallee + TagOffset[ws1], constexpr (CallFrameSlot::callee - CallerFrameAndPC::sizeInRegisters) * 8 + TagOffset[sp]
+    transferp WebAssemblyFunction::m_boxedWasmCallee + PayloadOffset[ws1], constexpr (CallFrameSlot::callee - CallerFrameAndPC::sizeInRegisters) * 8 + PayloadOffset[sp]
+    transferp WebAssemblyFunction::m_boxedWasmCallee + TagOffset[ws1], constexpr (CallFrameSlot::callee - CallerFrameAndPC::sizeInRegisters) * 8 + TagOffset[sp]
 end
 
     call ws0, WasmEntryPtrTag
@@ -867,9 +898,9 @@ end
     cCall2(_operationJSToWasmEntryWrapperBuildReturnFrame)
 
 if ARMv7
-    branchIfWasmException(_wasm_throw_from_slow_path_trampoline)
+    branchIfWasmException(.unwind)
 else
-    btpnz r1, _wasm_throw_from_slow_path_trampoline
+    btpnz r1, .unwind
 end
 
     # Clean up and return
@@ -882,12 +913,23 @@ end
 
     # We need to set our NativeCallee/instance here since haven't done it already and wasm_throw_from_slow_path_trampoline expects them.
 .stackOverflow:
-    getWebAssemblyFunctionAndsetNativeCalleeAndInstance(ws1, ws0)
+    getWebAssemblyFunctionAndSetNativeCalleeAndInstance(ws1, ws0)
     throwException(StackOverflow)
 
 .buildEntryFrameThrew:
-    getWebAssemblyFunctionAndsetNativeCalleeAndInstance(ws1, ws0)
-    jmp _wasm_throw_from_slow_path_trampoline
+    getWebAssemblyFunctionAndSetNativeCalleeAndInstance(ws1, ws0)
+
+.unwind:
+    loadp JSWebAssemblyInstance::m_vm[wasmInstance], a0
+    copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(a0, a1)
+
+if ASSERT_ENABLED
+    storep cfr, JSWebAssemblyInstance::m_temporaryCallFrame[wasmInstance]
+end
+
+    move wasmInstance, a0
+    call _operationWasmUnwind
+    jumpToException()
 end)
 
 # This is the interpreted analogue to WasmBinding.cpp:wasmToWasm
@@ -975,33 +1017,15 @@ op(wasm_to_js_wrapper_entry, macro()
     # are still in the caller frame.
     # Load this before we create the stack frame, since we lose old cfr, which we wrote Callee to
 
-    # We repurpose this slot temporarily for a WasmCallableFunction* from doWasmCall and friends.
+    # We repurpose this slot temporarily for a WasmCallableFunction* from resolveWasmCall and friends.
     tagReturnAddress sp
     preserveCallerPCAndCFR()
 
-    loadp (CodeBlock)[sp], ws0
-    loadp (Callee)[sp], ws1
-
-    const ScratchSpaceSize = 0x8 * 3 + 0x8 # alignment
-    const CalleeScratch = -0x10
-    const WasmInstanceScratch = -0x8
-    const WasmCallableFunctionScratch = -0x18
-
-    subp ScratchSpaceSize, sp
-
-if ARM64 or ARM64E
-    storepairq ws1, wasmInstance, CalleeScratch[cfr]
-elsif JSVALUE64
-    storeq ws1, CalleeScratch[cfr]
-    storeq wasmInstance, WasmInstanceScratch[cfr]
-else
-    storep ws1, CalleeScratch[cfr]
-    storep wasmInstance, WasmInstanceScratch[cfr]
-end
-    storep ws0, WasmCallableFunctionScratch[cfr]
-
     const RegisterSpaceScratchSize = 0x80
-    subp RegisterSpaceScratchSize, sp
+    subp (WasmToJSScratchSpaceSize + RegisterSpaceScratchSize), sp
+
+    loadp CodeBlock[cfr], ws0
+    storep ws0, WasmToJSCallableFunctionSlot[cfr]
 
     # Store all the registers here
 
@@ -1029,6 +1053,10 @@ else
     end)
 end
 
+if ASSERT_ENABLED
+    storep cfr, JSWebAssemblyInstance::m_temporaryCallFrame[wasmInstance]
+end
+
     move wasmInstance, a0
     move ws0, a1
     cCall2(_operationGetWasmCalleeStackSize)
@@ -1049,7 +1077,7 @@ end
     break
 
 .safe:
-    loadp WasmCallableFunctionScratch[cfr], t2
+    loadp WasmToJSCallableFunctionSlot[cfr], t2
     loadp JSC::Wasm::WasmOrJSImportableFunctionCallLinkInfo::importFunction[t2], t0
 if not JSVALUE64
     move (constexpr JSValue::CellTag), t1
@@ -1083,10 +1111,12 @@ end
     call t5, JSEntryPtrTag
 
 .postcall:
-    subp RegisterSpaceScratchSize, sp
     storep r0, [sp]
+if not JSVALUE64
+    storep r1, TagOffset[sp]
+end
 
-    loadp WasmCallableFunctionScratch[cfr], a0
+    loadp WasmToJSCallableFunctionSlot[cfr], a0
     call _operationWasmToJSExitNeedToUnpack
     btpnz r0, .unpack
 
@@ -1157,18 +1187,16 @@ else
     end)
 end
 
-    loadp WasmInstanceScratch[cfr], wasmInstance
-    addp (ScratchSpaceSize + RegisterSpaceScratchSize), sp
-
+    loadp CodeBlock[cfr], wasmInstance
     restoreCallerPCAndCFR()
     ret
 
 .handleException:
-    loadp (constexpr (JSWebAssemblyInstance::offsetOfVM()))[wasmInstance], a0
+    loadp JSWebAssemblyInstance::m_vm[wasmInstance], a0
     copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(a0, a1)
 
 if ASSERT_ENABLED
-    storep cfr, (constexpr (JSWebAssemblyInstance::offsetOfTemporaryCallFrame()))[wasmInstance]
+    storep cfr, JSWebAssemblyInstance::m_temporaryCallFrame[wasmInstance]
 end
 
     move wasmInstance, a0

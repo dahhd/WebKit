@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2022 Apple Inc.  All rights reserved.
+ * Copyright (C) 2004-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -149,7 +149,7 @@ ObjcValue convertValueToObjcValue(JSGlobalObject* lexicalGlobalObject, JSValue v
             result.doubleValue = (double)d;
             break;
         case ObjcVoidType:
-            bzero(&result, sizeof(ObjcValue));
+            zeroBytes(result);
             break;
 
         case ObjcInvalidType:

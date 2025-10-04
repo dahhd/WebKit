@@ -30,6 +30,7 @@
 #include <wtf/Atomics.h>
 #include <wtf/BitSet.h>
 #include <wtf/CountingLock.h>
+#include <wtf/DebugHeap.h>
 #include <wtf/HashFunctions.h>
 #include <wtf/IterationStatus.h>
 #include <wtf/PageBlock.h>
@@ -128,6 +129,7 @@ public:
         void* cellAlign(void*);
             
         bool isEmpty();
+        void setIsDestructible(bool);
 
         void lastChanceToFinalize();
 
@@ -549,7 +551,7 @@ inline CellAttributes MarkedBlock::attributes() const
 
 inline bool MarkedBlock::Handle::needsDestruction() const
 {
-    return m_attributes.destruction == NeedsDestruction;
+    return m_attributes.destruction != DoesNotNeedDestruction;
 }
 
 inline DestructionMode MarkedBlock::Handle::destruction() const
@@ -596,7 +598,7 @@ inline Dependency MarkedBlock::aboutToMark(HeapVersion markingVersion, HeapCell*
 {
     HeapVersion version;
     Dependency dependency = Dependency::loadAndFence(&header().m_markingVersion, version);
-    if (UNLIKELY(version != markingVersion))
+    if (version != markingVersion) [[unlikely]]
         aboutToMarkSlow(markingVersion, cell);
     return dependency;
 }
@@ -615,7 +617,7 @@ inline bool MarkedBlock::isMarked(HeapVersion markingVersion, const void* p)
 {
     HeapVersion version;
     Dependency dependency = Dependency::loadAndFence(&header().m_markingVersion, version);
-    if (UNLIKELY(version != markingVersion))
+    if (version != markingVersion) [[unlikely]]
         return false;
     return header().m_marks.get(atomNumber(p), dependency);
 }
@@ -695,7 +697,7 @@ inline void MarkedBlock::noteMarked()
     MarkCountBiasType biasedMarkCount = header().m_biasedMarkCount;
     ++biasedMarkCount;
     header().m_biasedMarkCount = biasedMarkCount;
-    if (UNLIKELY(!biasedMarkCount))
+    if (!biasedMarkCount) [[unlikely]]
         noteMarkedSlow();
 }
 

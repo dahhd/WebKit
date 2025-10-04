@@ -173,10 +173,8 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     bool isFirstInTagHistory() const { return m_isFirstInTagHistory; }
     bool isLastInTagHistory() const { return m_isLastInTagHistory; }
 
-    // FIXME: These should ideally be private, but CSSSelectorList and StyleRule use them.
+    // FIXME: This should ideally be private, but StyleRule uses it.
     void setLastInSelectorList() { m_isLastInSelectorList = true; }
-    void setNotFirstInTagHistory() { m_isFirstInTagHistory = false; }
-    void setNotLastInTagHistory() { m_isLastInTagHistory = false; }
 
     bool isForPage() const { return m_isForPage; }
 
@@ -188,6 +186,7 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 #endif
 
 private:
+    friend class CSSSelectorList;
     friend class MutableCSSSelector;
 
     void setValue(const AtomString&, bool matchLowerCase = false);
@@ -208,12 +207,6 @@ private:
 
     void setForPage() { m_isForPage = true; }
     void setImplicit() { m_isImplicit = true; }
-
-    unsigned simpleSelectorSpecificityForPage() const;
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-    CSSSelector* tagHistory() { return m_isLastInTagHistory ? nullptr : this + 1; }
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
     unsigned m_relation : 4 { enumToUnderlyingType(Relation::DescendantSpace) };
     mutable unsigned m_match : 5 { enumToUnderlyingType(Match::Unknown) };
@@ -271,7 +264,6 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     } m_data;
 };
 
-inline bool operator==(const AtomString& a, const PossiblyQuotedIdentifier& b) { return a == b.identifier; }
 inline bool operator==(const PossiblyQuotedIdentifier& a, const AtomString& b) { return a.identifier == b; }
 
 inline const QualifiedName& CSSSelector::attribute() const

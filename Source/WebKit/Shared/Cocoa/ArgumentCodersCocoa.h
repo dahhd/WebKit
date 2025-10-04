@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018, 2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2018-2025 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -128,9 +128,7 @@ enum class CFType : uint8_t {
     CFString,
     CFURL,
     SecCertificate,
-#if HAVE(SEC_ACCESS_CONTROL)
     SecAccessControl,
-#endif
     SecTrust,
     CGColorSpace,
     CGColor,
@@ -190,13 +188,15 @@ static inline bool isObjectClassAllowed(id object, const AllowedClassHashSet& al
 template<typename T, typename>
 std::optional<RetainPtr<T>> decodeRequiringAllowedClasses(Decoder& decoder)
 {
-#if ASSERT_ENABLED
+#if ASSERT_ENABLED && !HAVE(WK_SECURE_CODING_NSURLREQUEST)
     auto allowedClasses = decoder.allowedClasses();
 #endif
     auto result = decodeObjectDirectlyRequiringAllowedClasses<T>(decoder);
     if (!result)
         return std::nullopt;
+#if !HAVE(WK_SECURE_CODING_NSURLREQUEST)
     ASSERT(!*result || isObjectClassAllowed((*result).get(), allowedClasses));
+#endif
     return { *result };
 }
 
@@ -206,7 +206,9 @@ std::optional<T> decodeRequiringAllowedClasses(Decoder& decoder)
     auto result = decodeObjectDirectlyRequiringAllowedClasses<T>(decoder);
     if (!result)
         return std::nullopt;
+#if !HAVE(WK_SECURE_CODING_NSURLREQUEST)
     ASSERT(!*result || isObjectClassAllowed((*result).get(), decoder.allowedClasses()));
+#endif
     return { *result };
 }
 
